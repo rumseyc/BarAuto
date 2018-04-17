@@ -31,5 +31,7 @@ void SetupBlackAndWhiteStripedPalette();
 void SetupPurpleAndGreenPalette();
 void stripDrinkComplete(CRGB color, bool disable_stale_leds);
 void clearLedIdxVal();
+void setSolidColorRange(CRGB color, CRGB* buf, uint16_t startIdx, uint16_t len, uint8_t bufIdx, uint8_t brightness);
+
 
 #endif

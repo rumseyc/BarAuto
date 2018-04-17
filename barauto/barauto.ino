@@ -1,151 +1,163 @@
-//#include "LedControl.h"
-// 
-//void setup()
-//{
-//  Serial.begin(9600);
-//  delay(1000); // power-up safety delay
-// 
-//  init_LedComponents();
-//
-//}
-// 
-//void loop() 
-//{
-// 
-//}
-//
-
-
-
 #include "LedControl.h"
- 
+#include "StepMotorCntl.h"
+#include <AccelStepper.h>
+
+#define LEFT_PROX_PIN   12
+#define RIGHT_PROX_PIN  13
+#define HOME_PROX_PIN   11
+
+
+AccelStepper stepper(1, 8, 9);
+
+//                   0       1      2      3   4    5     6     7     8     
+uint32_t bottlePos[] = {-12000, -9000, -6000, -3000, 0, 3000, 6000, 9000};
+
+boolean machineBusy = false;
+
 void setup()
 {
-  Serial.begin(9600);
-  delay(1000); // power-up safety delay
- 
+  Serial.begin(115200);
+  
+  stepper.setMaxSpeed(3000);
+  stepper.setSpeed(1500);
+  stepper.setAcceleration(1500); 
+  
+  delay(2000); // power-up safety delay
+
+  pinMode(MOTOR_DIR_PIN, OUTPUT);
+  pinMode(MOTOR_CNTL_PIN, OUTPUT); 
+  pinMode(MOTOR_ENB_PIN, OUTPUT);
+  digitalWrite(MOTOR_ENB_PIN, HIGH);
+  pinMode(LED_STRIP_CTRL_PIN, OUTPUT);
+  pinMode(CUP_LED_CTRL_PIN, OUTPUT);
+
+  pinMode(HOME_PROX_PIN, INPUT);
+  pinMode(RIGHT_PROX_PIN, INPUT);
+  pinMode(LEFT_PROX_PIN, INPUT);
+
   init_LedComponents();
 
+  searchForHomePos();
+  stepper.setMaxSpeed(3000);
+  stepper.setSpeed(1500);
+  stepper.setAcceleration(1500); 
+  
 }
  
 void loop() 
 {
-  static uint32_t spd = 0;
-  static uint8_t startIndex = 0;
-  static bool flag = false;
-  static int testVal = 1;
-  static int delay_val = 100;
-  static uint32_t prevTime = 0;
-
-  ChangePalettePeriodically();
-  startIndex = startIndex + 1; /* motion speed */
-  
-  switch(testVal)
-  {
-    case(0):
-      currentPalette = RainbowColors_p;
-      currentBlending = LINEARBLEND;
-      FillLEDsFromPaletteColors(startIndex, sLedArr, LED_STRIP_NUM_LEDS);
-      FillLEDsFromPaletteColors(startIndex, cLedArr, CUP_LED_NUM_LEDS);
-      track_glass(spd, CRGB::White);
-      break;
-    case(1):
-      currentPalette = RainbowColors_p;
-      currentBlending = LINEARBLEND;
-      FillLEDsFromPaletteColors(startIndex, sLedArr, LED_STRIP_NUM_LEDS);
-      FillLEDsFromPaletteColors(startIndex, cLedArr, CUP_LED_NUM_LEDS);
-      track_glass(spd, CRGB::Purple);
-      break;
-    case(2):
-      SetupBlackAndWhiteStripedPalette();       currentBlending = NOBLEND;
-      FillLEDsFromPaletteColors(startIndex, sLedArr, LED_STRIP_NUM_LEDS);
-      FillLEDsFromPaletteColors(startIndex, cLedArr, CUP_LED_NUM_LEDS);
-      break;
-    case(3):
-      currentPalette = RainbowColors_p;
-      currentBlending = LINEARBLEND;
-      FillLEDsFromPaletteColors(startIndex, cLedArr, CUP_LED_NUM_LEDS);
-      break;
-    case(4):
-      currentPalette = RainbowColors_p;
-      currentBlending = LINEARBLEND;
-      FillLEDsFromPaletteColors(startIndex, cLedArr, CUP_LED_NUM_LEDS);
-      break;
-    case(5):
-      currentPalette = RainbowColors_p;
-      currentBlending = LINEARBLEND;
-      FillLEDsFromPaletteColors(startIndex, cLedArr, CUP_LED_NUM_LEDS);
-      break;
+  if (Serial.available() > 0) {
+    String message="";
+    while(Serial.available()){ 
+      char partial = Serial.read();
+      message += partial;
+      delay(2);
+    }
+    parseString(message);
   }
 
-  if(millis() - prevTime >= delay_val)
-  {
-    prevTime = millis();
-    
-    if(testVal == 3)
-    {
-        stripDrinkComplete(CRGB::White, false);
-    }
-    else if(testVal == 4)
-    {
-        stripDrinkComplete(CRGB::Purple, false);
-    }
-    else if(testVal == 5)
-    {
-      stripDrinkComplete(CRGB::Purple, true);
-    }
-    FastLED[0].showLeds(DEFAULT_BRIGHTNESS);
-    FastLED[1].showLeds(DEFAULT_BRIGHTNESS);
-  
-    if(spd == MAX_STEP_MOTOR_VAL)
-      flag = true;
-    else if(spd == 0)
-      flag = false;
-    if(flag == false)
-      spd +=10;
-    else
-      spd -=10;
-  }
+//  if(!machineBusy)
+//    idleLights();
+}
 
-  char c;
-  if(Serial.available()) {
-    c = Serial.read();
-    if (c == '0') {  // forward
-      testVal = 0;
-    }
-    else if (c == '1') {  // reverse
-      testVal = 1;
-    }
-    else if (c == '2') {  // reverse
-      testVal = 2;
-    }
-    else if (c == '3') {  // reverse
-      testVal = 3;
-      FastLED.clearData();
-    }
-    else if (c == '4') {  // reverse
-      testVal = 4;
-    }    
-    else if (c == '5') {  // reverse
-      FastLED.clearData();
-      clearLedIdxVal();
-      testVal = 5;
-    }
-    else if (c == '6') {  // reverse
-      testVal = 6;
-    }
-    else if (c == 'i') {  // reverse
-      delay_val += 10;
-      Serial.println(delay_val);
-    }
-    else if (c == 'd') {  // reverse
-      delay_val -= 10;
-      if(delay_val < 1)
-        delay_val = 1;
-      Serial.println(delay_val);
-    }
-  }
- 
+/*
+  COMMUNICATION METHODS
+*/
+void parseString(String message){
+//  tell("Got a message");
+  Serial.println(message);
+  if(message.startsWith("!") && message.endsWith("\n")){
+     if(message == "!GoHome\n"){
+       Serial.println("Going Home");
+//       goHome();
+//       success();
+     }else if(message.startsWith("!NewDrink")){
+         Serial.println("NewDrink");
+         machineBusy = true;
+         int firstIndex = message.indexOf('|');
+         int secondIndex = message.indexOf('|', firstIndex+1);
+         int thirdIndex = message.indexOf('|',secondIndex+1);
+         int starts =(message.substring(firstIndex+1,secondIndex)).toInt();
+         int time=(message.substring(secondIndex+1,thirdIndex)).toInt();
+         bool newLights= (message.substring(thirdIndex+1)).toInt() == 1;  
+         Serial.println( starts);
+         Serial.println( time);
+         Serial.println( newLights);
+
+//         if(newLights==false && hasLights == true){
+//           ledSet(BLACK);
+//           shutDownNeo();
+//         }
+//         hasLights=newLights;
+      
+//         goHome();
+//         if(waitForActivation(starts,time)){
+//            success(); 
+//         }else{
+//           timeout();
+//         }
+     } else {
+         //tell("Directives");
+         int index = message.indexOf('|');
+         int botIdx = (message.substring(1,index)).toInt();
+         int mliters = (message.substring(index+1)).toInt();
+         Serial.println( botIdx);
+         Serial.println( mliters);
+         servoGoToPos(botIdx);
+//         spill(times);
+//         success();
+//         if(pos==0 && times==0 && hasLights){
+//           machineBusy = false;
+//           rainbowParty(15);      
+//         }
+     }
+  }  
 }
 
 
+//Add find home position with stepper motor
+void searchForHomePos()
+{
+  //First step left
+  stepper.moveTo(-100000);
+  while ((digitalRead(LEFT_PROX_PIN) != HIGH) || (digitalRead(HOME_PROX_PIN) != HIGH)) 
+    stepper.run();
+  stepper.stop();
+  
+  if(digitalRead(HOME_PROX_PIN) != HIGH)
+  {
+    stepper.moveTo(100000); //Move right
+    while ((digitalRead(RIGHT_PROX_PIN) != HIGH) || (digitalRead(HOME_PROX_PIN) != HIGH)) 
+      stepper.run();
+    stepper.stop();
+  }
+
+  if(digitalRead(HOME_PROX_PIN) == HIGH)
+  {
+    stepper.setCurrentPosition(0); //Set 0 position
+  }
+  else
+    exit(-1);
+    
+}
+
+void servoGoToPos(uint32_t index)
+{
+  stepper.moveTo(bottlePos[index]);
+  while (stepper.currentPosition() != index) // Full speed up to 300
+    stepper.run();
+//  stepper.runToNewPosition(bottlePos[index]); // Cause an overshoot then back to 0
+
+}
+
+//void spill(int times){
+//  myservo.attach(servo); 
+//  for ( int i = 0; i<times ; i++){
+//    servoup();
+//    delay(timeToSpill);
+//    servodown();
+//    if(i!=times-1) delay (timeToRefill);
+//  }  
+//  delay(200);
+//  myservo.detach(); 
+//}

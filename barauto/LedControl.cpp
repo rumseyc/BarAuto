@@ -161,3 +161,17 @@ void clearLedIdxVal()
   prevLedTrackingIdx = 0;
 }
 
+void setSolidColorRange(CRGB color, CRGB* buf, uint16_t startIdx, uint16_t len, uint8_t bufIdx, uint8_t brightness)
+{
+  if(buf == NULL || bufIdx > 1)
+  {
+    return;
+  }
+  
+  for(int i = startIdx; i < (startIdx + len); i++)
+  {
+    buf[i] = color;
+  }
+  FastLED[bufIdx].showLeds(brightness);
+}
+
